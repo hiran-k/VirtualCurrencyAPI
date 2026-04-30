@@ -1,1 +1,159 @@
-https://github.com/hiran-k/VirtualCurrencyAPI/tree/main
+# CS 335 — Introduction to Artificial Intelligence
+# API Assignment Starter Code — Northeastern Illinois University
+#
+# API Chosen: CoinGecko — Cryptocurrency Market Data
+# Docs: https://docs.coingecko.com/reference/introduction
+# ─────────────────────────────────────────────────────────────
+
+import os
+import json
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+
+API_KEY = os.getenv("MY_API_KEY")
+if not API_KEY:
+    raise ValueError("API key not found. Did you copy .env.example to .env?")
+
+BASE_URL = "https://api.coingecko.com/api/v3"
+
+HEADERS = {
+    "accept": "application/json",
+    "x-cg-demo-api-key": API_KEY,
+}
+
+
+def divider(label):
+    print(f"\n{'=' * 50}\n{label}\n{'=' * 50}")
+
+
+# ── Call 1: GET /simple/price ─────────────────────────────
+# Retrieves current prices for multiple coins in multiple
+# currencies, plus 24-hour percentage change.
+def call_one_get():
+    divider("CALL 1 — GET Current Prices")
+
+    url = f"{BASE_URL}/simple/price"
+    params = {
+        "ids": "bitcoin,ethereum,solana,dogecoin",
+        "vs_currencies": "usd,eur",
+        "include_24hr_change": "true",
+        "include_market_cap": "true",
+    }
+
+    response = requests.get(url, headers=HEADERS, params=params)
+
+    if response.status_code == 200:
+        data = response.json()
+        for coin, values in data.items():
+            usd   = values.get("usd", "N/A")
+            eur   = values.get("eur", "N/A")
+            chg   = values.get("usd_24h_change", None)
+            mcap  = values.get("usd_market_cap", None)
+            chg_str  = f"{chg:+.2f}%" if chg is not None else "N/A"
+            mcap_str = f"${mcap:,.0f}" if mcap else "N/A"
+            print(f"\n  {coin.upper()}")
+            print(f"    Price (USD):   ${usd:,.4f}")
+            print(f"    Price (EUR):   €{eur:,.4f}")
+            print(f"    24h Change:    {chg_str}")
+            print(f"    Market Cap:    {mcap_str}")
+    elif response.status_code == 401:
+        print("[ERROR] 401 Unauthorized — check your API key in .env")
+    elif response.status_code == 429:
+        print("[ERROR] 429 Rate Limited — wait and retry")
+    else:
+        print(f"[ERROR] {response.status_code}: {response.text}")
+
+
+# ── Call 2: GET /coins/markets ────────────────────────────
+# Retrieves the top 10 coins ranked by market cap, showing
+# price, volume, and 24h price change for each.
+def call_two_post():
+    divider("CALL 2 — GET Top 10 Coins by Market Cap")
+
+    url = f"{BASE_URL}/coins/markets"
+    params = {
+        "vs_currency": "usd",
+        "order": "market_cap_desc",
+        "per_page": 10,
+        "page": 1,
+        "price_change_percentage": "24h",
+    }
+
+    response = requests.get(url, headers=HEADERS, params=params)
+
+    if response.status_code == 200:
+        data = response.json()
+        print(f"\n  {'Rank':<5} {'Symbol':<8} {'Name':<15} {'Price (USD)':<16} {'24h %':<10} {'Market Cap'}")
+        print(f"  {'-'*4} {'-'*7} {'-'*14} {'-'*15} {'-'*9} {'-'*20}")
+        for coin in data:
+            rank   = coin.get("market_cap_rank", "?")
+            symbol = coin.get("symbol", "?").upper()
+            name   = coin.get("name", "?")
+            price  = coin.get("current_price", 0)
+            chg    = coin.get("price_change_percentage_24h", None)
+            mcap   = coin.get("market_cap", 0)
+            price_str = f"${price:,.4f}" if price < 1 else f"${price:,.2f}"
+            chg_str   = f"{chg:+.2f}%" if chg is not None else "N/A"
+            mcap_str  = f"${mcap:,.0f}"
+            print(f"  {rank:<5} {symbol:<8} {name:<15} {price_str:<16} {chg_str:<10} {mcap_str}")
+    elif response.status_code == 401:
+        print("[ERROR] 401 Unauthorized — check your API key in .env")
+    elif response.status_code == 429:
+        print("[ERROR] 429 Rate Limited — wait and retry")
+    else:
+        print(f"[ERROR] {response.status_code}: {response.text}")
+
+
+# ── Call 3: GET /coins/{id} — Parameterized ───────────────
+# Fetches a detailed profile for any coin by ID.
+# Demonstrates varied output by accepting dynamic input.
+def call_three_parameterized(user_input: str):
+    divider(f"CALL 3 — GET Coin Detail  |  coin: '{user_input}'")
+
+    url = f"{BASE_URL}/coins/{user_input}"
+    params = {
+        "localization": "false",
+        "tickers": "false",
+        "market_data": "true",
+        "community_data": "false",
+        "developer_data": "false",
+    }
+
+    response = requests.get(url, headers=HEADERS, params=params)
+
+    if response.status_code == 200:
+        data   = response.json()
+        name   = data.get("name", "N/A")
+        symbol = data.get("symbol", "N/A").upper()
+        rank   = data.get("market_cap_rank", "N/A")
+        genesis = data.get("genesis_date", "N/A")
+        desc   = data.get("description", {}).get("en", "")
+        short_desc = desc.split(".")[0] + "." if desc else "N/A"
+        mkt    = data.get("market_data", {})
+        price  = mkt.get("current_price", {}).get("usd", "N/A")
+        ath    = mkt.get("ath", {}).get("usd", "N/A")
+        ath_dt = mkt.get("ath_date", {}).get("usd", "N/A")[:10]
+        atl    = mkt.get("atl", {}).get("usd", "N/A")
+        supply = mkt.get("circulating_supply", None)
+        print(f"\n  Name:               {name} ({symbol})")
+        print(f"  Market Cap Rank:    #{rank}")
+        print(f"  Genesis Date:       {genesis}")
+        print(f"  Description:        {short_desc}")
+        print(f"  Current Price:      ${price:,.2f}" if isinstance(price, (int, float)) else f"  Current Price:      {price}")
+        print(f"  All-Time High:      ${ath:,.2f} (on {ath_dt})" if isinstance(ath, (int, float)) else f"  All-Time High:      {ath}")
+        print(f"  All-Time Low:       ${atl:,.4f}" if isinstance(atl, (int, float)) else f"  All-Time Low:       {atl}")
+        print(f"  Circulating Supply: {supply:,.0f} {symbol}" if supply else "  Circulating Supply: N/A")
+    elif response.status_code == 404:
+        print(f"[ERROR] 404 — Coin '{user_input}' not found. Check the coin ID.")
+    elif response.status_code == 429:
+        print("[ERROR] 429 Rate Limited — slow down and retry")
+    else:
+        print(f"[ERROR] {response.status_code}: {response.text}")
+
+
+if __name__ == "__main__":
+    call_one_get()
+    call_two_post()
+    call_three_parameterized("ethereum")  # try "bitcoin", "solana", etc.
